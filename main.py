@@ -3,8 +3,7 @@ from config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS
 from world import World
 from visualization import Renderer, InputHandler
 
-
-# 니얼굴
+#huodojsdidsiojsdiojsdioj
 def main():
     pygame.init()
 
