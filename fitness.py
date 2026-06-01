@@ -1,5 +1,5 @@
 import math
-from config import TRAIT_NAMES, TRAIT_WEIGHTS
+from config import TRAIT_NAMES
 
 
 class FitnessCalculator:
@@ -9,9 +9,10 @@ class FitnessCalculator:
         for name in TRAIT_NAMES:
             trait = biomorph.genome.traits[name]
             optimal = environment.optimal_traits[name]
-            weight = TRAIT_WEIGHTS[name]
+            weight = environment.trait_weights[name]
             distance += weight * ((trait - optimal) ** 2)
 
         fitness = math.exp(-distance)
         biomorph.fitness = fitness
+        biomorph.selection_error = distance
         return fitness

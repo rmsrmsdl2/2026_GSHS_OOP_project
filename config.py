@@ -1,30 +1,38 @@
-SCREEN_WIDTH = 1100
-SCREEN_HEIGHT = 700
+SCREEN_WIDTH = 1280
+SCREEN_HEIGHT = 760
 FPS = 60
 
-POPULATION_SIZE = 60
-GENERATION_LENGTH = 300
-MAX_GENERATIONS = 100
+INITIAL_POPULATION = 80
+MIN_POPULATION = 28
+MAX_POPULATION = 140
+
+GENERATION_INTERVAL = 150
+
+MUTATION_STRENGTH = 0.10
+ELITE_RATE = 0.12
+SURVIVAL_PRESSURE = 0.58
+OFFSPRING_PER_PAIR = 2
 
 TRAIT_NAMES = [
     "body_size",
     "branch_angle",
     "movement_speed",
     "energy_efficiency",
-    "mutation_rate"
+    "mutation_rate",
 ]
 
-INITIAL_TRAIT_MIN = 0.15
-INITIAL_TRAIT_MAX = 0.85
+TRAIT_WEIGHTS = {
+    "body_size": 1.0,
+    "branch_angle": 1.2,
+    "movement_speed": 1.0,
+    "energy_efficiency": 1.3,
+    "mutation_rate": 0.6,
+}
 
-BASE_MUTATION_RATE = 0.08
-MUTATION_STRENGTH = 0.12
-
-FITNESS_SENSITIVITY = 4.0
-ELITE_RATIO = 0.12
-
-BACKGROUND_COLOR = (18, 22, 30)
-TEXT_COLOR = (240, 240, 240)
-PANEL_COLOR = (32, 38, 50)
-ORGANISM_COLOR = (80, 200, 120)
-BEST_ORGANISM_COLOR = (255, 210, 80)
+TRAIT_LABELS = {
+    "body_size": "Body Size",
+    "branch_angle": "Branch Angle",
+    "movement_speed": "Move Speed",
+    "energy_efficiency": "Energy Efficiency",
+    "mutation_rate": "Mutation Rate",
+}
