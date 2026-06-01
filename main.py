@@ -4,6 +4,7 @@ from world import World
 from visualization import Renderer, InputHandler
 
 
+# 니얼굴
 def main():
     pygame.init()
 
