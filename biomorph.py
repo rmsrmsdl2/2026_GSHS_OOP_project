@@ -10,7 +10,7 @@ class Biomorph:
         self.id = Biomorph.next_id
         Biomorph.next_id += 1
         self.genome = genome if genome else Genome()
-        self.x = x if x is not None else random.randint(60, 1040)
+        self.x = x if x is not None else random.randint(60, 900)
         self.y = y if y is not None else random.randint(90, 650)
         self.fitness = 0.0
         self.selection_error = 0.0

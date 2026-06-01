@@ -29,7 +29,7 @@ class World:
 
         for _ in range(self.speed_multiplier):
             for biomorph in self.population:
-                biomorph.update(SCREEN_WIDTH, SCREEN_HEIGHT)
+                biomorph.update(SCREEN_WIDTH - 330, SCREEN_HEIGHT)
 
             self.frame_count += 1
 
