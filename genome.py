@@ -19,11 +19,10 @@ class Genome:
         child_traits = {}
 
         for name in TRAIT_NAMES:
-            blend = random.uniform(0.35, 0.65)
-            child_traits[name] = (
-                self.traits[name] * blend
-                + other.traits[name] * (1.0 - blend)
-            )
+            if random.random() < 0.5:
+                child_traits[name] = self.traits[name]
+            else:
+                child_traits[name] = other.traits[name]
 
         return Genome(child_traits)
 
@@ -38,5 +37,14 @@ class Genome:
 
         return Genome(new_traits)
 
+    def child_variant(self):
+        return self.copy().mutate()
+
     def get_vector(self):
         return [self.traits[name] for name in TRAIT_NAMES]
+
+    def scaled(self, name, low, high):
+        return low + self.traits[name] * (high - low)
+
+    def recursion_depth(self):
+        return int(round(self.scaled("recursion_depth", 2, 5)))

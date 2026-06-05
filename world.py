@@ -1,78 +1,62 @@
-from config import GENERATION_INTERVAL, SCREEN_HEIGHT, SCREEN_WIDTH, TRAIT_NAMES
+import random
+
+from biomorph import Biomorph
+from config import POPULATION_SIZE
 from environment import Environment
-from evolution import EvolutionEngine
 
 
 class World:
     def __init__(self):
-        self.environment = Environment()
-        self.engine = EvolutionEngine()
-        self.population = self.engine.create_initial_population()
-
         self.generation = 1
-        self.frame_count = 0
-        self.paused = False
-        self.speed_multiplier = 1
-
-        self.average_trait_history = []
-        self.population_history = []
-        self.fitness_history = []
-        self.error_history = []
-
+        self.environment = Environment()
+        self.population = [Biomorph() for _ in range(POPULATION_SIZE)]
+        self.selected_index = 0
+        self.message = "바이오모프를 클릭하면 그 개체를 부모로 다음 세대를 만듭니다."
         self.environment.update(self.generation)
-        self.engine.evaluate(self.population, self.environment)
-        self._record_generation()
+
+    @property
+    def selected(self):
+        return self.population[self.selected_index]
 
     def update(self):
-        if self.paused:
+        self.environment.update(self.generation)
+
+    def select(self, index):
+        if not 0 <= index < len(self.population):
             return
 
-        for _ in range(self.speed_multiplier):
-            for biomorph in self.population:
-                biomorph.update(SCREEN_WIDTH - 330, SCREEN_HEIGHT)
-
-            self.frame_count += 1
-
-            if self.frame_count >= GENERATION_INTERVAL:
-                self.next_generation()
-                self.frame_count = 0
-
-    def next_generation(self):
+        parent = self.population[index]
+        self.population = self._children_from(parent)
+        self.selected_index = 0
         self.generation += 1
+        self.message = f"{self.generation}세대: #{parent.id} 개체를 부모로 선택했습니다."
+
+    def randomize(self):
+        self.population = [Biomorph() for _ in range(POPULATION_SIZE)]
+        self.selected_index = 0
+        self.generation = 1
+        self.environment = Environment()
         self.environment.update(self.generation)
-        self.population = self.engine.next_generation(self.population, self.environment)
-        self._record_generation()
+        self.message = "새로운 무작위 바이오모프 집단을 만들었습니다."
 
-    def _record_generation(self):
-        self.average_trait_history.append(self.get_average_traits())
-        self.population_history.append(len(self.population))
-        self.fitness_history.append(self.engine.last_stats["average_fitness"])
-        self.error_history.append(self.engine.last_stats["average_error"])
+    def mutate_selected(self):
+        parent = self.selected
+        self.population = self._children_from(parent)
+        self.selected_index = 0
+        self.generation += 1
+        self.message = f"{self.generation}세대: #{parent.id} 개체에서 변이시켰습니다."
 
-        self.average_trait_history = self.average_trait_history[-80:]
-        self.population_history = self.population_history[-80:]
-        self.fitness_history = self.fitness_history[-80:]
-        self.error_history = self.error_history[-80:]
+    def _children_from(self, parent):
+        children = [parent]
 
-    def get_average_traits(self):
-        averages = {}
+        while len(children) < POPULATION_SIZE:
+            if len(children) > 2 and random.random() < 0.20:
+                partner = random.choice(children)
+                children.append(parent.crossover_child(partner))
+            else:
+                children.append(parent.breed_child())
 
-        for name in TRAIT_NAMES:
-            total = sum(b.genome.traits[name] for b in self.population)
-            averages[name] = total / len(self.population)
+        return children
 
-        return averages
-
-    def get_best_biomorph(self):
-        return max(self.population, key=lambda biomorph: biomorph.fitness)
-
-    def toggle_pause(self):
-        self.paused = not self.paused
-
-    def cycle_speed(self):
-        if self.speed_multiplier == 1:
-            self.speed_multiplier = 2
-        elif self.speed_multiplier == 2:
-            self.speed_multiplier = 4
-        else:
-            self.speed_multiplier = 1
+    def fitness(self, biomorph):
+        return self.environment.fitness(biomorph)

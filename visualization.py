@@ -1,5 +1,13 @@
 import pygame
-from config import SCREEN_HEIGHT, SCREEN_WIDTH, TRAIT_LABELS, TRAIT_NAMES
+
+from config import (
+    GRID_COLUMNS,
+    GRID_ROWS,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    TRAIT_LABELS,
+    TRAIT_NAMES,
+)
 
 
 class Renderer:
@@ -8,203 +16,170 @@ class Renderer:
         self.font = pygame.font.SysFont("malgungothic", 20)
         self.small_font = pygame.font.SysFont("malgungothic", 16)
         self.tiny_font = pygame.font.SysFont("malgungothic", 13)
-        self.trait_colors = {
-            "body_size": (238, 105, 95),
-            "branch_angle": (96, 178, 255),
-            "movement_speed": (255, 204, 92),
-            "energy_efficiency": (97, 214, 142),
-            "mutation_rate": (204, 126, 255),
-        }
+        self.card_rects = []
 
     def draw(self, world):
-        self.screen.fill((15, 18, 23))
+        self.screen.fill((18, 20, 22))
         self._draw_header(world)
-        self._draw_environment_field(world)
-        self._draw_biomorphs(world)
+        self.card_rects = self._layout_cards()
+        best_index = self._best_index(world)
+
+        for index, biomorph in enumerate(world.population):
+            score = world.fitness(biomorph)
+            self._draw_card(index, biomorph, world.selected_index == index, index == best_index, score)
+
         self._draw_environment_panel(world)
-        self._draw_trait_panel(world)
-        self._draw_fitness_panel(world)
-        self._draw_event_log(world)
+        self._draw_gene_panel(world)
         pygame.display.flip()
 
     def _draw_header(self, world):
-        pygame.draw.rect(self.screen, (29, 35, 44), (0, 0, SCREEN_WIDTH, 72))
-        items = [
-            f"Generation {world.generation}",
-            f"Population {len(world.population)}",
-            f"Mode {world.environment.mode}: {world.environment.name}",
-            f"Speed x{world.speed_multiplier}",
-            "SPACE pause | N next | 1 stable | 2 periodic | 3 shock | F speed | ESC quit",
-        ]
-
-        x = 18
-        for index, text in enumerate(items):
-            color = (242, 244, 247) if index < 4 else (174, 184, 196)
-            img = self.small_font.render(text, True, color)
-            self.screen.blit(img, (x, 26))
-            x += img.get_width() + 28
-
-    def _draw_environment_field(self, world):
-        factors = world.environment.factors
-        sunlight = factors["sunlight"]
-        food = factors["food"]
-        wind = factors["wind"]
-
-        sky = (
-            int(18 + sunlight * 42),
-            int(28 + sunlight * 45),
-            int(38 + sunlight * 52),
+        pygame.draw.rect(self.screen, (35, 39, 43), (0, 0, SCREEN_WIDTH, 76))
+        title = self.font.render("수학적 바이오모프 곤충 모형", True, (241, 244, 238))
+        info = self.small_font.render(
+            f"세대 {world.generation}   |   클릭: 부모 선택   |   N: 선택 개체 변이   |   R: 무작위 초기화   |   ESC: 종료",
+            True,
+            (191, 199, 190),
         )
-        pygame.draw.rect(self.screen, sky, (0, 72, SCREEN_WIDTH - 330, SCREEN_HEIGHT - 72))
+        message = self.tiny_font.render(world.message, True, (153, 205, 183))
+        self.screen.blit(title, (24, 15))
+        self.screen.blit(info, (24, 43))
+        self.screen.blit(message, (760, 45))
 
-        food_color = (45, int(80 + food * 100), 62)
-        pygame.draw.rect(self.screen, food_color, (0, SCREEN_HEIGHT - 86, SCREEN_WIDTH - 330, 86))
+    def _layout_cards(self):
+        rects = []
+        left = 24
+        top = 96
+        right_panel = 286
+        gap = 14
+        area_w = SCREEN_WIDTH - right_panel - left - 20
+        area_h = SCREEN_HEIGHT - top - 24
+        card_w = (area_w - gap * (GRID_COLUMNS - 1)) / GRID_COLUMNS
+        card_h = (area_h - gap * (GRID_ROWS - 1)) / GRID_ROWS
 
-        for i in range(9):
-            y = 112 + i * 58
-            start_x = 20 + (world.generation * 7 + i * 37) % 160
-            length = int(40 + wind * 90)
-            pygame.draw.line(
-                self.screen,
-                (80, 96, 112),
-                (start_x, y),
-                (start_x + length, y - int(wind * 16)),
-                1,
-            )
+        for row in range(GRID_ROWS):
+            for col in range(GRID_COLUMNS):
+                x = left + col * (card_w + gap)
+                y = top + row * (card_h + gap)
+                rects.append(pygame.Rect(round(x), round(y), round(card_w), round(card_h)))
 
-    def _draw_biomorphs(self, world):
-        for biomorph in sorted(world.population, key=lambda item: item.fitness):
-            biomorph.draw(self.screen)
+        return rects
+
+    def _draw_card(self, index, biomorph, selected, best, score):
+        rect = self.card_rects[index]
+        bg = (30, 34, 36) if not selected else (41, 45, 39)
+        border = (68, 74, 78)
+        if best:
+            border = (106, 205, 137)
+        if selected:
+            border = (237, 201, 92)
+
+        pygame.draw.rect(self.screen, bg, rect, border_radius=8)
+        pygame.draw.rect(self.screen, border, rect, 1 if not selected else 2, border_radius=8)
+
+        number = self.tiny_font.render(f"#{biomorph.id}", True, (190, 197, 187))
+        fitness = self.tiny_font.render(f"{score:.2f}", True, (153, 205, 183) if best else (178, 188, 177))
+        self.screen.blit(number, (rect.x + 10, rect.y + 8))
+        self.screen.blit(fitness, (rect.right - fitness.get_width() - 10, rect.y + 8))
+        biomorph.draw(self.screen, rect.inflate(-16, -28), selected)
 
     def _draw_environment_panel(self, world):
-        x = SCREEN_WIDTH - 315
-        y = 88
-        self._panel(x, y, 295, 180, "Environment Pressure")
+        x = SCREEN_WIDTH - 266
+        y = 96
+        w = 242
+        h = 164
+        pygame.draw.rect(self.screen, (30, 34, 36), (x, y, w, h), border_radius=8)
+        pygame.draw.rect(self.screen, (68, 74, 78), (x, y, w, h), 1, border_radius=8)
 
+        title = self.small_font.render("자동 변화 환경", True, (241, 244, 238))
+        self.screen.blit(title, (x + 16, y + 16))
+
+        labels = {
+            "light": "빛",
+            "humidity": "습도",
+            "wind": "바람",
+            "temperature": "온도",
+        }
+        for i, (name, value) in enumerate(world.environment.factors.items()):
+            row_y = y + 48 + i * 28
+            label = self.tiny_font.render(f"{labels[name]} {value:.2f}", True, (217, 223, 214))
+            self.screen.blit(label, (x + 16, row_y))
+            pygame.draw.rect(self.screen, (58, 64, 66), (x + 94, row_y + 5, 120, 7), border_radius=4)
+            pygame.draw.rect(self.screen, (117, 173, 205), (x + 94, row_y + 5, int(120 * value), 7), border_radius=4)
+
+    def _draw_gene_panel(self, world):
+        biomorph = world.selected
+        x = SCREEN_WIDTH - 266
+        y = 278
+        w = 242
+        h = 322
+        pygame.draw.rect(self.screen, (30, 34, 36), (x, y, w, h), border_radius=8)
+        pygame.draw.rect(self.screen, (68, 74, 78), (x, y, w, h), 1, border_radius=8)
+
+        score = world.fitness(biomorph)
+        title = self.small_font.render(f"선택 유전자  적합도 {score:.2f}", True, (241, 244, 238))
+        self.screen.blit(title, (x + 16, y + 16))
+
+        compact_traits = TRAIT_NAMES[:7]
+        for i, name in enumerate(compact_traits):
+            value = biomorph.genome.traits[name]
+            target = world.environment.optimal_traits[name]
+            row_y = y + 45 + i * 39
+            label = self.tiny_font.render(f"{TRAIT_LABELS[name]}  {value:.2f}", True, (217, 223, 214))
+            self.screen.blit(label, (x + 16, row_y))
+            pygame.draw.rect(self.screen, (58, 64, 66), (x + 16, row_y + 20, 198, 7), border_radius=4)
+            pygame.draw.rect(
+                self.screen,
+                (117, 190, 151),
+                (x + 16, row_y + 20, int(198 * value), 7),
+                border_radius=4,
+            )
+            target_x = x + 16 + int(198 * target)
+            pygame.draw.line(self.screen, (237, 201, 92), (target_x, row_y + 17), (target_x, row_y + 30), 2)
+
+        self._draw_mechanism_panel(world)
+
+    def _draw_mechanism_panel(self, world):
+        x = SCREEN_WIDTH - 266
+        y = SCREEN_HEIGHT - 126
+        w = 242
+        h = 102
+        pygame.draw.rect(self.screen, (30, 34, 36), (x, y, w, h), border_radius=8)
+        pygame.draw.rect(self.screen, (68, 74, 78), (x, y, w, h), 1, border_radius=8)
+
+        title = self.small_font.render("작동 원리", True, (241, 244, 238))
+        self.screen.blit(title, (x + 16, y + 12))
         lines = [
-            world.environment.description,
-            f"Dominant trait: {TRAIT_LABELS[world.environment.get_dominant_pressure()]}",
+            "환경값이 자동으로 변함",
+            "환경마다 유리한 형질이 달라짐",
+            "노란 선은 현재 최적 형질",
+            "클릭한 부모의 유전자가 변이됨",
         ]
         for i, text in enumerate(lines):
-            img = self.tiny_font.render(text, True, (210, 216, 224))
-            self.screen.blit(img, (x + 14, y + 38 + i * 22))
+            img = self.tiny_font.render(text, True, (205, 213, 202))
+            self.screen.blit(img, (x + 16, y + 36 + i * 18))
 
-        factors = world.environment.factors
-        labels = [("Sunlight", "sunlight"), ("Food", "food"), ("Wind", "wind"), ("Temp", "temperature")]
-        for i, (label, key) in enumerate(labels):
-            self._bar(x + 14, y + 88 + i * 20, 160, 8, factors[key], (105, 166, 240), label)
+    def get_card_index_at(self, position):
+        for index, rect in enumerate(self.card_rects):
+            if rect.collidepoint(position):
+                return index
+        return None
 
-    def _draw_trait_panel(self, world):
-        x = SCREEN_WIDTH - 315
-        y = 284
-        self._panel(x, y, 295, 232, "Trait Average vs Optimal")
-
-        averages = world.get_average_traits()
-        for i, name in enumerate(TRAIT_NAMES):
-            y_pos = y + 42 + i * 34
-            label = TRAIT_LABELS[name]
-            value = averages[name]
-            optimal = world.environment.optimal_traits[name]
-            color = self.trait_colors[name]
-
-            text = self.tiny_font.render(f"{label}  avg {value:.2f} / opt {optimal:.2f}", True, (222, 226, 232))
-            self.screen.blit(text, (x + 14, y_pos))
-
-            pygame.draw.rect(self.screen, (57, 64, 76), (x + 14, y_pos + 18, 214, 8))
-            pygame.draw.rect(self.screen, color, (x + 14, y_pos + 18, int(value * 214), 8))
-            pygame.draw.line(
-                self.screen,
-                (255, 238, 145),
-                (x + 14 + int(optimal * 214), y_pos + 14),
-                (x + 14 + int(optimal * 214), y_pos + 30),
-                2,
-            )
-
-    def _draw_fitness_panel(self, world):
-        x = 26
-        y = SCREEN_HEIGHT - 205
-        self._panel(x, y, 610, 176, "Evolution Analytics")
-
-        stats = world.engine.last_stats
-        summary = (
-            f"Best fitness {stats['best_fitness']:.3f}   "
-            f"Average fitness {stats['average_fitness']:.3f}   "
-            f"Average error D {stats['average_error']:.3f}   "
-            f"Survivors {stats['survivors']}   Births {stats['births']}"
-        )
-        img = self.tiny_font.render(summary, True, (222, 226, 232))
-        self.screen.blit(img, (x + 14, y + 38))
-
-        self._line_graph(x + 18, y + 70, 270, 82, world.fitness_history, (104, 216, 142), "fitness")
-        self._line_graph(x + 318, y + 70, 260, 82, world.error_history, (238, 105, 95), "selection error")
-
-    def _draw_event_log(self, world):
-        x = SCREEN_WIDTH - 315
-        y = 532
-        self._panel(x, y, 295, 170, "Environment Events")
-
-        if not world.environment.event_log:
-            return
-
-        for i, (generation, name) in enumerate(world.environment.event_log[-5:]):
-            text = self.tiny_font.render(f"Gen {generation}: {name}", True, (214, 220, 228))
-            self.screen.blit(text, (x + 14, y + 40 + i * 24))
-
-    def _line_graph(self, x, y, w, h, values, color, label):
-        pygame.draw.rect(self.screen, (21, 26, 34), (x, y, w, h))
-        text = self.tiny_font.render(label, True, (182, 192, 204))
-        self.screen.blit(text, (x + 8, y + 7))
-
-        if len(values) < 2:
-            return
-
-        visible = values[-50:]
-        high = max(visible)
-        low = min(visible)
-        span = max(0.001, high - low)
-        points = []
-
-        for i, value in enumerate(visible):
-            px = x + 12 + i * ((w - 24) / max(1, len(visible) - 1))
-            py = y + h - 12 - ((value - low) / span) * (h - 34)
-            points.append((px, py))
-
-        pygame.draw.lines(self.screen, color, False, points, 2)
-
-    def _bar(self, x, y, w, h, value, color, label):
-        text = self.tiny_font.render(f"{label} {value:.2f}", True, (213, 219, 226))
-        self.screen.blit(text, (x, y - 14))
-        pygame.draw.rect(self.screen, (55, 62, 74), (x + 76, y, w, h))
-        pygame.draw.rect(self.screen, color, (x + 76, y, int(w * value), h))
-
-    def _panel(self, x, y, w, h, title):
-        pygame.draw.rect(self.screen, (27, 32, 40), (x, y, w, h))
-        pygame.draw.rect(self.screen, (57, 65, 78), (x, y, w, h), 1)
-        img = self.small_font.render(title, True, (242, 244, 248))
-        self.screen.blit(img, (x + 14, y + 12))
+    def _best_index(self, world):
+        return max(range(len(world.population)), key=lambda index: world.fitness(world.population[index]))
 
 
 class InputHandler:
-    def handle(self, event, world):
+    def handle(self, event, world, renderer):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            index = renderer.get_card_index_at(event.pos)
+            if index is not None:
+                world.select(index)
+
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
-                world.toggle_pause()
-            elif event.key == pygame.K_n:
-                world.next_generation()
-            elif event.key == pygame.K_f:
-                world.cycle_speed()
-            elif event.key == pygame.K_1:
-                world.environment.mode = world.environment.STABLE
-                world.environment._record_mode_event()
-                world.next_generation()
-            elif event.key == pygame.K_2:
-                world.environment.mode = world.environment.PERIODIC
-                world.environment._record_mode_event()
-                world.next_generation()
-            elif event.key == pygame.K_3:
-                world.environment.mode = world.environment.SHOCK
-                world.environment._record_mode_event()
-                world.next_generation()
+            if event.key == pygame.K_n:
+                world.mutate_selected()
+            elif event.key == pygame.K_r:
+                world.randomize()
             elif event.key == pygame.K_ESCAPE:
                 return False
 

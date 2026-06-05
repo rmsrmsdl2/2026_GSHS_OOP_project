@@ -2,37 +2,33 @@ SCREEN_WIDTH = 1280
 SCREEN_HEIGHT = 760
 FPS = 60
 
-INITIAL_POPULATION = 80
-MIN_POPULATION = 28
-MAX_POPULATION = 140
+POPULATION_SIZE = 20
+GRID_COLUMNS = 5
+GRID_ROWS = 4
 
-GENERATION_INTERVAL = 150
-
-MUTATION_STRENGTH = 0.10
-ELITE_RATE = 0.12
-SURVIVAL_PRESSURE = 0.58
-OFFSPRING_PER_PAIR = 2
+MUTATION_STRENGTH = 0.13
+MIN_SEGMENT_LENGTH = 4.5
 
 TRAIT_NAMES = [
-    "body_size",
+    "trunk_length",
     "branch_angle",
-    "movement_speed",
-    "energy_efficiency",
+    "curvature",
+    "branch_ratio",
+    "body_width",
+    "wing_span",
+    "antenna_angle",
+    "recursion_depth",
     "mutation_rate",
 ]
 
-TRAIT_WEIGHTS = {
-    "body_size": 1.0,
-    "branch_angle": 1.2,
-    "movement_speed": 1.0,
-    "energy_efficiency": 1.3,
-    "mutation_rate": 0.6,
-}
-
 TRAIT_LABELS = {
-    "body_size": "Body Size",
-    "branch_angle": "Branch Angle",
-    "movement_speed": "Move Speed",
-    "energy_efficiency": "Energy Efficiency",
-    "mutation_rate": "Mutation Rate",
+    "trunk_length": "몸통 길이",
+    "branch_angle": "가지 각도",
+    "curvature": "휘어짐",
+    "branch_ratio": "가지 비율",
+    "body_width": "몸통 폭",
+    "wing_span": "날개 폭",
+    "antenna_angle": "더듬이 각도",
+    "recursion_depth": "재귀 깊이",
+    "mutation_rate": "돌연변이율",
 }

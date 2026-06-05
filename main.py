@@ -3,12 +3,12 @@ from config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS
 from world import World
 from visualization import Renderer, InputHandler
 
-#huodojsdidsiojsdiojsdioj
+
 def main():
     pygame.init()
 
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Biomorph Evolution Simulation")
+    pygame.display.set_caption("Mathematical Biomorph Insect Model")
 
     clock = pygame.time.Clock()
     world = World()
@@ -22,7 +22,7 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
 
-            if not input_handler.handle(event, world):
+            if not input_handler.handle(event, world, renderer):
                 running = False
 
         world.update()
