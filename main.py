@@ -30,7 +30,7 @@ def main():
         clock.tick(FPS)
 
     pygame.quit()
-
+#니얼굴 !!!
 
 if __name__ == "__main__":
     main()
