@@ -1,14 +1,15 @@
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS
+
+from config import FPS, SCREEN_HEIGHT, SCREEN_WIDTH
+from visualization import InputHandler, Renderer
 from world import World
-from visualization import Renderer, InputHandler
 
 
 def main():
     pygame.init()
 
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Mathematical Biomorph Insect Model")
+    pygame.display.set_caption("수학적 바이오모프 곤충 모형")
 
     clock = pygame.time.Clock()
     world = World()
@@ -30,7 +31,7 @@ def main():
         clock.tick(FPS)
 
     pygame.quit()
-#니얼굴 !!!
+
 
 if __name__ == "__main__":
     main()
