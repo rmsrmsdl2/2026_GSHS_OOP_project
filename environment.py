@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import math
 import random
 
@@ -18,7 +20,7 @@ class Environment:
         self.optimal_traits = {name: 0.5 for name in TRAIT_NAMES}
         self.disaster_timer = 0
         self.disaster_name = ""
-        self.event_log = ["자동 환경 변화 시작"]
+        self.event_log = ["자동 환경 변화가 시작되었습니다."]
         self._update_optimal_traits()
 
     @property
@@ -35,16 +37,14 @@ class Environment:
             self.disaster_timer -= 1
             if self.disaster_timer == 0:
                 self.disaster_name = ""
-                self.event_log.append("자연재해 종료")
-                self.event_log = self.event_log[-5:]
+                self._push_event("급격한 환경 변화가 종료되었습니다.")
 
         self._update_optimal_traits()
 
     def toggle_auto_mode(self):
         self.auto_mode = not self.auto_mode
         mode = "자동" if self.auto_mode else "수동"
-        self.event_log.append(f"환경 조절 모드: {mode}")
-        self.event_log = self.event_log[-5:]
+        self._push_event(f"환경 조절 모드: {mode}")
 
     def select_factor(self, index):
         self.selected_factor_index = index % len(FACTOR_NAMES)
@@ -66,8 +66,7 @@ class Environment:
         for name, value in changes.items():
             self.factors[name] = value
         self.disaster_timer = 180
-        self.event_log.append(f"자연재해 발생: {self.disaster_name}")
-        self.event_log = self.event_log[-5:]
+        self._push_event(f"급격한 환경 변화 발생: {self.disaster_name}")
         self._update_optimal_traits()
 
     def fitness(self, biomorph):
@@ -156,6 +155,10 @@ class Environment:
             "recursion_depth": 0.22 + light * 0.45,
             "mutation_rate": 0.16 + min(0.72, instability * 0.60),
         })
+
+    def _push_event(self, text):
+        self.event_log.append(text)
+        self.event_log = self.event_log[-5:]
 
     def _wave(self, value, low, high):
         normalized = (math.sin(value) + 1.0) / 2.0

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import pygame
 
 from config import FPS, SCREEN_HEIGHT, SCREEN_WIDTH
@@ -9,7 +11,7 @@ def main():
     pygame.init()
 
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("수학적 바이오모프 곤충 모형")
+    pygame.display.set_caption("환경 변화 적응 진화 시뮬레이터")
 
     clock = pygame.time.Clock()
     world = World()

@@ -1,16 +1,21 @@
+# -*- coding: utf-8 -*-
+
 SCREEN_WIDTH = 1280
 SCREEN_HEIGHT = 760
 FPS = 60
 
 PARENT_COUNT = 5
 CHILDREN_PER_PARENT = 3
-POPULATION_SIZE = PARENT_COUNT * CHILDREN_PER_PARENT
+PURE_MUTANT_COUNT = 5
+POPULATION_SIZE = PARENT_COUNT * CHILDREN_PER_PARENT + PURE_MUTANT_COUNT
 GRID_COLUMNS = 5
-GRID_ROWS = 3
+GRID_ROWS = 4
 
 GENERATION_INTERVAL = 360
 MUTATION_STRENGTH = 0.13
 MIN_SEGMENT_LENGTH = 4.5
+HISTORY_LIMIT = 80
+MAX_GENERATIONS = 50
 
 TRAIT_NAMES = [
     "trunk_length",
@@ -32,7 +37,7 @@ TRAIT_LABELS = {
     "body_width": "몸통 폭",
     "wing_span": "날개 폭",
     "antenna_angle": "더듬이 각도",
-    "recursion_depth": "재귀 깊이",
+    "recursion_depth": "분기 깊이",
     "mutation_rate": "돌연변이율",
 }
 
@@ -46,13 +51,25 @@ FACTOR_LABELS = {
 }
 
 TRAIT_ENVIRONMENT_NOTES = {
-    "trunk_length": "빛이 강할수록 긴 중심 줄기가 유리합니다.",
-    "branch_angle": "빛이 강할수록 넓은 가지 각도가 유리합니다.",
-    "curvature": "바람이 강할수록 휘어진 구조가 유리합니다.",
-    "branch_ratio": "습도가 높을수록 가지가 길게 이어지는 구조가 유리합니다.",
-    "body_width": "온도가 높을수록 지나치게 넓은 몸통은 불리합니다.",
-    "wing_span": "바람이 약할 때는 큰 날개가 유리하지만 강풍에서는 불리합니다.",
-    "antenna_angle": "습도가 높을수록 넓은 더듬이 각도가 유리합니다.",
-    "recursion_depth": "빛이 강할수록 복잡한 가지 구조가 유리합니다.",
-    "mutation_rate": "환경 차이가 클수록 높은 돌연변이율이 유리합니다.",
+    "trunk_length": "빛이 강할수록 중심 줄기가 긴 개체가 유리합니다.",
+    "branch_angle": "빛 조건에 따라 유리한 가지 각도가 달라집니다.",
+    "curvature": "바람이 강할수록 휘어지는 구조가 유리합니다.",
+    "branch_ratio": "습도가 높을수록 가지가 길게 뻗는 구조가 유리합니다.",
+    "body_width": "온도가 높으면 지나치게 두꺼운 몸통은 불리합니다.",
+    "wing_span": "강한 바람에서는 넓은 날개가 불리합니다.",
+    "antenna_angle": "습도 변화는 감각 기관의 각도 선택압에 영향을 줍니다.",
+    "recursion_depth": "빛이 충분하면 복잡한 분기 구조가 유리합니다.",
+    "mutation_rate": "환경이 불안정할수록 변이가 있는 집단이 유리합니다.",
+}
+
+TRAIT_COLORS = {
+    "trunk_length": (116, 196, 255),
+    "branch_angle": (255, 203, 92),
+    "curvature": (153, 205, 183),
+    "branch_ratio": (176, 151, 255),
+    "body_width": (241, 128, 118),
+    "wing_span": (113, 166, 255),
+    "antenna_angle": (247, 164, 96),
+    "recursion_depth": (126, 220, 144),
+    "mutation_rate": (213, 137, 255),
 }

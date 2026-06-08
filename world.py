@@ -1,5 +1,16 @@
+# -*- coding: utf-8 -*-
+
 from biomorph import Biomorph
-from config import CHILDREN_PER_PARENT, GENERATION_INTERVAL, PARENT_COUNT, POPULATION_SIZE
+from config import (
+    CHILDREN_PER_PARENT,
+    GENERATION_INTERVAL,
+    HISTORY_LIMIT,
+    MAX_GENERATIONS,
+    PARENT_COUNT,
+    POPULATION_SIZE,
+    PURE_MUTANT_COUNT,
+    TRAIT_NAMES,
+)
 from environment import Environment
 
 
@@ -9,11 +20,15 @@ class World:
         self.frame_count = 0
         self.paused = False
         self.auto_generation = True
+        self.started = False
+        self.setup_mode = None
+        self.finished = False
         self.environment = Environment()
         self.population = [Biomorph() for _ in range(POPULATION_SIZE)]
         self.selected_index = 0
         self.parent_ids = []
-        self.message = "상위 5개체가 자동으로 부모가 되어 다음 세대를 만듭니다."
+        self.message = "실험 방식을 선택하세요."
+        self.history = []
         self.environment.update(self.generation)
 
     @property
@@ -21,7 +36,7 @@ class World:
         return self.population[self.selected_index]
 
     def update(self):
-        if self.paused:
+        if not self.started or self.paused or self.finished:
             return
 
         self.environment.update(self.generation)
@@ -34,9 +49,12 @@ class World:
         if 0 <= index < len(self.population):
             self.selected_index = index
             biomorph = self.population[index]
-            self.message = f"#{biomorph.id} 개체 정보를 표시합니다. 번식은 적합도 기준으로 자동 진행됩니다."
+            self.message = f"#{biomorph.id} 개체를 선택했습니다. 번식은 적합도 순위에 따라 진행됩니다."
 
     def next_generation(self):
+        if not self.started or self.finished:
+            return
+
         ranked = self.ranked_population()
         parents = [biomorph for biomorph, _score in ranked[:PARENT_COUNT]]
         self.parent_ids = [parent.id for parent in parents]
@@ -46,12 +64,24 @@ class World:
             for _ in range(CHILDREN_PER_PARENT):
                 children.append(parent.breed_child())
 
-        self.population = children
+        pure_mutants = [Biomorph() for _ in range(PURE_MUTANT_COUNT)]
+        self.population = (children + pure_mutants)[:POPULATION_SIZE]
         self.selected_index = 0
         self.generation += 1
         self.frame_count = 0
         self.environment.update(self.generation)
-        self.message = f"{self.generation}세대: 적합도 상위 5개체가 각각 자손 3개를 만들었습니다."
+        self.record_history()
+
+        if self.generation >= MAX_GENERATIONS:
+            self.finished = True
+            self.auto_generation = False
+            self.message = "실험 종료: 최종 적응 결과를 정리합니다."
+        else:
+            self.message = (
+                f"{self.generation}세대: 상위 {PARENT_COUNT}개체의 자손 "
+                f"{PARENT_COUNT * CHILDREN_PER_PARENT}개체와 쌩랜덤 돌연변이 "
+                f"{PURE_MUTANT_COUNT}개체가 생성되었습니다."
+            )
 
     def ranked_population(self):
         return sorted(
@@ -60,27 +90,128 @@ class World:
             reverse=True,
         )
 
+    def record_history(self):
+        ranked = self.ranked_population()
+        scores = [score for _biomorph, score in ranked]
+        avg_fitness = sum(scores) / len(scores)
+        best_fitness = scores[0]
+        avg_error = sum(self.selection_error(biomorph) for biomorph in self.population) / len(self.population)
+        avg_traits = {}
+
+        for name in TRAIT_NAMES:
+            avg_traits[name] = sum(biomorph.genome.traits[name] for biomorph in self.population) / len(self.population)
+
+        self.history.append({
+            "generation": self.generation,
+            "avg_fitness": avg_fitness,
+            "best_fitness": best_fitness,
+            "avg_error": avg_error,
+            "factors": self.environment.factors.copy(),
+            "avg_traits": avg_traits,
+        })
+        self.history = self.history[-HISTORY_LIMIT:]
+
+    def selection_error(self, biomorph):
+        error = 0.0
+        for name in TRAIT_NAMES:
+            trait = biomorph.genome.traits[name]
+            target = self.environment.optimal_traits[name]
+            error += (trait - target) ** 2
+        return min(1.0, error / len(TRAIT_NAMES) * 5.0)
+
+    def experiment_summary(self):
+        ranked = self.ranked_population()
+        winner, winner_score = ranked[0]
+        first = self.history[0]
+        last = self.history[-1]
+        trait_changes = []
+
+        for name in TRAIT_NAMES:
+            start = first["avg_traits"][name]
+            end = last["avg_traits"][name]
+            trait_changes.append((name, start, end, end - start))
+
+        improved = sorted(trait_changes, key=lambda item: item[3], reverse=True)
+        declined = sorted(trait_changes, key=lambda item: item[3])
+        closest_traits = sorted(
+            (
+                (name, abs(winner.genome.traits[name] - self.environment.optimal_traits[name]))
+                for name in TRAIT_NAMES
+            ),
+            key=lambda item: item[1],
+        )
+
+        return {
+            "winner": winner,
+            "winner_score": winner_score,
+            "winner_error": self.selection_error(winner),
+            "initial_avg_fitness": first["avg_fitness"],
+            "final_avg_fitness": last["avg_fitness"],
+            "initial_avg_error": first["avg_error"],
+            "final_avg_error": last["avg_error"],
+            "improved_traits": improved[:4],
+            "declined_traits": declined[:3],
+            "closest_traits": closest_traits[:4],
+        }
+
     def randomize(self):
         self.population = [Biomorph() for _ in range(POPULATION_SIZE)]
         self.selected_index = 0
         self.generation = 1
         self.frame_count = 0
         self.parent_ids = []
+        self.finished = False
+        self.started = False
+        self.setup_mode = None
+        self.auto_generation = True
         self.environment = Environment()
         self.environment.update(self.generation)
-        self.message = "새로운 무작위 바이오모프 집단을 만들었습니다."
+        self.history = []
+        self.message = "새 실험을 시작할 방식을 선택하세요."
+
+    def choose_auto_start(self):
+        self.setup_mode = "auto"
+        self.started = True
+        self.auto_generation = True
+        self.environment.auto_mode = True
+        self.history = []
+        self.record_history()
+        self.message = "자동 모드로 실험을 시작했습니다."
+
+    def choose_manual_setup(self):
+        self.setup_mode = "manual"
+        self.started = False
+        self.auto_generation = False
+        self.environment.auto_mode = False
+        self.message = "수동 모드: 초기 환경 변수를 조절한 뒤 실험을 시작하세요."
+
+    def start_manual_experiment(self):
+        self.setup_mode = "manual"
+        self.started = True
+        self.auto_generation = False
+        self.environment.auto_mode = False
+        self.history = []
+        self.record_history()
+        self.message = "수동 설정 환경으로 실험을 시작했습니다. N으로 세대를 진행하세요."
 
     def toggle_pause(self):
+        if not self.started or self.finished:
+            return
         self.paused = not self.paused
+        self.message = "시뮬레이션을 일시정지했습니다." if self.paused else "시뮬레이션을 다시 진행합니다."
 
     def toggle_auto_generation(self):
+        if not self.started or self.finished:
+            return
         self.auto_generation = not self.auto_generation
         mode = "자동" if self.auto_generation else "수동"
         self.message = f"세대 교체 모드: {mode}"
 
     def trigger_disaster(self):
+        if not self.started or self.finished:
+            return
         self.environment.trigger_disaster()
-        self.message = f"자연재해 발생: {self.environment.disaster_name}"
+        self.message = f"급격한 환경 변화 발생: {self.environment.disaster_name}"
 
     def fitness(self, biomorph):
         return self.environment.fitness(biomorph)

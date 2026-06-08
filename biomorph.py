@@ -8,16 +8,17 @@ from genome import Genome
 class Biomorph:
     next_id = 1
 
-    def __init__(self, genome=None):
+    def __init__(self, genome=None, parent_id=None):
         self.id = Biomorph.next_id
         Biomorph.next_id += 1
+        self.parent_id = parent_id
         self.genome = genome if genome else Genome()
 
     def breed_child(self):
-        return Biomorph(self.genome.child_variant())
+        return Biomorph(self.genome.child_variant(), parent_id=self.id)
 
     def crossover_child(self, other):
-        return Biomorph(self.genome.crossover(other.genome).mutate())
+        return Biomorph(self.genome.crossover(other.genome).mutate(), parent_id=self.id)
 
     def get_color(self):
         angle = self.genome.traits["branch_angle"]
