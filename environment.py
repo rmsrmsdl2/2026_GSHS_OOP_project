@@ -28,7 +28,7 @@ class Environment:
         return FACTOR_NAMES[self.selected_factor_index]
 
     def update(self, generation, speed=1.0):
-        self.time += 0.010 * speed
+        self.time += 0.004 * speed
 
         if self.auto_mode:
             self._auto_update(generation)
@@ -55,14 +55,17 @@ class Environment:
         self.factors[name] = self._clamp(self.factors[name] + amount)
         self._update_optimal_traits()
 
-    def trigger_disaster(self):
+    def trigger_disaster(self, index=None):
         disasters = [
             ("가뭄", {"humidity": 0.08, "temperature": 0.86, "wind": 0.62}),
             ("폭풍", {"wind": 0.96, "light": 0.24, "humidity": 0.72}),
             ("한파", {"temperature": 0.12, "wind": 0.56, "light": 0.38}),
             ("폭염", {"temperature": 0.96, "humidity": 0.22, "light": 0.86}),
         ]
-        self.disaster_name, changes = random.choice(disasters)
+        if index is not None:
+            self.disaster_name, changes = disasters[index % len(disasters)]
+        else:
+            self.disaster_name, changes = random.choice(disasters)
         for name, value in changes.items():
             self.factors[name] = value
         self.disaster_timer = 180

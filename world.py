@@ -16,6 +16,7 @@ from environment import Environment
 
 class World:
     def __init__(self):
+        Biomorph.next_id = 1
         self.generation = 1
         self.frame_count = 0
         self.paused = False
@@ -27,6 +28,8 @@ class World:
         self.population = [Biomorph() for _ in range(POPULATION_SIZE)]
         self.selected_index = 0
         self.parent_ids = []
+        self.mutant_ids = set()
+        self.disaster_select_mode = False
         self.message = "실험 방식을 선택하세요."
         self.history = []
         self.selection_history = []
@@ -74,6 +77,7 @@ class World:
 
         self.generation += 1
         self.population = next_population
+        self.mutant_ids = {m.id for m in pure_mutants}
         self._register_population(children, source="선택 부모 자손")
         self._register_population(pure_mutants, source="쌩랜덤 돌연변이")
         self.selected_index = 0
@@ -190,7 +194,14 @@ class World:
             "improved_traits": improved[:4],
             "selected_improved_traits": selected_improved[:4] if selected_improved else improved[:4],
             "closest_traits": closest_traits[:4],
+            "first_mutant_generation": self._first_mutant_generation(representative.id),
         }
+
+    def _first_mutant_generation(self, biomorph_id):
+        for record in self.trace_lineage(biomorph_id):
+            if record["source"] == "쌩랜덤 돌연변이":
+                return record["generation"]
+        return None
 
     def trace_lineage(self, biomorph_id):
         chain = []
@@ -215,6 +226,7 @@ class World:
             }
 
     def randomize(self):
+        Biomorph.next_id = 1
         self.population = [Biomorph() for _ in range(POPULATION_SIZE)]
         self.selected_index = 0
         self.generation = 1
@@ -224,6 +236,8 @@ class World:
         self.started = False
         self.setup_mode = None
         self.auto_generation = True
+        self.mutant_ids = set()
+        self.disaster_select_mode = False
         self.environment = Environment()
         self.environment.update(self.generation)
         self.history = []
@@ -272,10 +286,11 @@ class World:
         mode = "자동" if self.auto_generation else "수동"
         self.message = f"세대 교체 모드: {mode}"
 
-    def trigger_disaster(self):
+    def trigger_disaster(self, index=None):
         if not self.started or self.finished:
             return
-        self.environment.trigger_disaster()
+        self.environment.trigger_disaster(index)
+        self.disaster_select_mode = False
         self.message = f"급격한 환경 변화 발생: {self.environment.disaster_name}"
 
     def fitness(self, biomorph):

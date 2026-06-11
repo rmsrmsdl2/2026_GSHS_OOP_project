@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import pygame
+from biomorph import Biomorph as _Biomorph
+from genome import Genome as _Genome
 
 from config import (
     FACTOR_LABELS,
@@ -20,21 +22,24 @@ from config import (
 class Renderer:
     def __init__(self, screen):
         self.screen = screen
-        self.font = pygame.font.SysFont("malgungothic", 22)
-        self.small_font = pygame.font.SysFont("malgungothic", 16)
-        self.tiny_font = pygame.font.SysFont("malgungothic", 13)
+        _fp = pygame.font.match_font("malgungothic") or pygame.font.match_font("gulim")
+        self.font = pygame.font.Font(_fp, 21)
+        self.small_font = pygame.font.Font(_fp, 15)
+        self.tiny_font = pygame.font.Font(_fp, 13)
         self.card_rects = []
         self.start_buttons = {}
+        self.gallery_scroll_x = 0
         self.colors = {
-            "bg": (15, 18, 21),
-            "panel": (27, 31, 35),
-            "border": (62, 70, 76),
-            "text": (239, 243, 238),
-            "muted": (166, 176, 168),
-            "accent": (153, 205, 183),
-            "gold": (237, 201, 92),
-            "danger": (235, 112, 101),
-            "blue": (116, 196, 255),
+            "bg": (12, 15, 18),
+            "panel": (24, 29, 34),
+            "border": (72, 84, 92),
+            "text": (240, 245, 240),
+            "muted": (188, 200, 190),
+            "accent": (153, 210, 185),
+            "gold": (242, 206, 96),
+            "danger": (240, 118, 106),
+            "blue": (120, 200, 255),
+            "purple": (213, 137, 255),
         }
 
     def draw(self, world):
@@ -60,10 +65,13 @@ class Renderer:
         for index, biomorph in enumerate(world.population):
             score = world.fitness(biomorph)
             rank = ranked_ids.get(biomorph.id)
-            self._draw_card(index, biomorph, world.selected_index == index, rank, score)
+            is_mutant = biomorph.id in world.mutant_ids
+            self._draw_card(index, biomorph, world.selected_index == index, rank, score, is_mutant)
 
         self._draw_analytics_panel(world)
         self._draw_side_panel(world, ranked)
+        if world.disaster_select_mode:
+            self._draw_disaster_overlay()
         pygame.display.flip()
 
     def _draw_header(self, world):
@@ -76,14 +84,14 @@ class Renderer:
         self._metric_pill(560, 18, "세대", str(world.generation), self.colors["accent"])
         self._metric_pill(705, 18, "개체 수", str(len(world.population)), self.colors["blue"])
         self._metric_pill(842, 18, "모드", "자동" if world.auto_generation else "수동", self.colors["gold"])
-        controls = "N 다음 세대   R 초기화   A 환경 자동   G 세대 자동   D 급변   1-4 요인 선택   <- -> 조절   SPACE 일시정지"
+        controls = "N 다음세대   R 초기화   A 환경자동   G 세대자동   D 재난   1-4 요인   ←→ 조절   SPACE 정지   F11 전체화면"
         self.screen.blit(self.tiny_font.render(controls, True, (184, 194, 187)), (560, 54))
 
     def _draw_stage_background(self, world):
         light = world.environment.factors["light"]
         humidity = world.environment.factors["humidity"]
         wind = world.environment.factors["wind"]
-        field = pygame.Rect(18, 100, 920, 452)
+        field = pygame.Rect(18, 100, 1080, 452)
         base = (int(22 + light * 24), int(28 + humidity * 22), int(30 + light * 20))
         pygame.draw.rect(self.screen, base, field, border_radius=10)
         pygame.draw.rect(self.screen, (55, 64, 68), field, 1, border_radius=10)
@@ -102,7 +110,7 @@ class Renderer:
         left = 38
         top = 138
         gap = 10
-        area_w = 880
+        area_w = 1040
         area_h = 386
         card_w = (area_w - gap * (GRID_COLUMNS - 1)) / GRID_COLUMNS
         card_h = (area_h - gap * (GRID_ROWS - 1)) / GRID_ROWS
@@ -114,15 +122,20 @@ class Renderer:
                 rects.append(pygame.Rect(round(x), round(y), round(card_w), round(card_h)))
         return rects
 
-    def _draw_card(self, index, biomorph, selected, rank, score):
+    def _draw_card(self, index, biomorph, selected, rank, score, is_mutant=False):
         rect = self.card_rects[index]
         bg = (26, 31, 35) if not selected else (38, 42, 35)
-        border = self.colors["gold"] if selected else (self.colors["accent"] if rank else self.colors["border"])
+        if is_mutant:
+            border = self.colors["gold"] if selected else self.colors["purple"]
+        else:
+            border = self.colors["gold"] if selected else (self.colors["accent"] if rank else self.colors["border"])
         pygame.draw.rect(self.screen, bg, rect, border_radius=8)
         pygame.draw.rect(self.screen, border, rect, 2 if selected else 1, border_radius=8)
 
         if rank:
             self._small_badge(rect.x + 8, rect.y + 7, f"선택 {rank}", self.colors["accent"])
+        elif is_mutant:
+            self._small_badge(rect.x + 8, rect.y + 7, "돌연변이", self.colors["purple"])
         else:
             self.screen.blit(self.tiny_font.render(f"#{biomorph.id}", True, self.colors["muted"]), (rect.x + 10, rect.y + 8))
 
@@ -134,7 +147,7 @@ class Renderer:
         self._bar(rect.x + 9, rect.bottom - 14, rect.width - 18, 5, score, self.colors["accent"])
 
     def _draw_analytics_panel(self, world):
-        rect = pygame.Rect(18, 568, 920, 168)
+        rect = pygame.Rect(18, 562, 1080, 188)
         self._panel(rect, "세대별 자연선택 분석 그래프")
         if len(world.history) < 2:
             msg = self.tiny_font.render("다음 세대가 진행되면 그래프가 누적됩니다.", True, self.colors["muted"])
@@ -142,7 +155,7 @@ class Renderer:
             return
 
         self._line_graph(
-            pygame.Rect(rect.x + 18, rect.y + 44, 420, 92),
+            pygame.Rect(rect.x + 18, rect.y + 44, 330, 100),
             [
                 ("평균 적합도", [row["avg_fitness"] for row in world.history], self.colors["accent"]),
                 ("최고 적합도", [row["best_fitness"] for row in world.history], self.colors["gold"]),
@@ -151,21 +164,43 @@ class Renderer:
             1.0,
         )
         self._line_graph(
-            pygame.Rect(rect.x + 476, rect.y + 44, 420, 92),
+            pygame.Rect(rect.x + 368, rect.y + 44, 330, 100),
             [("선택 오차 D", [row["avg_error"] for row in world.history], self.colors["danger"])],
             0.0,
             1.0,
         )
+        tracked_traits = ["trunk_length", "branch_angle", "curvature", "body_width", "wing_span", "mutation_rate"]
+        trait_series = [
+            (TRAIT_LABELS[name], [row["avg_traits"][name] for row in world.history], TRAIT_COLORS[name])
+            for name in tracked_traits
+        ]
+        self._line_graph(
+            pygame.Rect(rect.x + 718, rect.y + 44, 344, 84),
+            trait_series,
+            0.0,
+            1.0,
+            show_labels=False,
+        )
+        lx = rect.x + 720
+        for i, (label, _, color) in enumerate(trait_series):
+            row_i = i // 3
+            col = i % 3
+            bx = lx + col * 112
+            by = rect.y + 132 + row_i * 16
+            pygame.draw.rect(self.screen, color, (bx, by + 2, 8, 8), border_radius=2)
+            short = label.replace(" ", "")[:4]
+            txt = self.tiny_font.render(short, True, color)
+            self.screen.blit(txt, (bx + 11, by))
         latest = world.history[-1]
-        summary = f"평균 적합도 {latest['avg_fitness']:.3f}   최고 적합도 {latest['best_fitness']:.3f}   평균 오차 D {latest['avg_error']:.3f}"
-        self.screen.blit(self.tiny_font.render(summary, True, (205, 214, 207)), (rect.x + 18, rect.bottom - 24))
+        summary = f"평균 적합도 {latest['avg_fitness']:.3f}   최고 {latest['best_fitness']:.3f}   오차 D {latest['avg_error']:.3f}"
+        self.screen.blit(self.tiny_font.render(summary, True, (205, 214, 207)), (rect.x + 18, rect.bottom - 18))
 
     def _draw_side_panel(self, world, ranked):
-        x = 958
+        x = 1118
         self._draw_environment_panel(world, x, 100)
         self._draw_environment_graph(world, x, 284)
         self._draw_selected_panel(world, x, 430)
-        self._draw_rank_event_panel(world, ranked, x, 650)
+        self._draw_rank_event_panel(world, ranked, x, 690)
 
     def _draw_environment_panel(self, world, x, y):
         rect = pygame.Rect(x, y, 300, 166)
@@ -201,11 +236,11 @@ class Renderer:
     def _draw_selected_panel(self, world, x, y):
         biomorph = world.selected
         score = world.fitness(biomorph)
-        rect = pygame.Rect(x, y, 300, 202)
+        rect = pygame.Rect(x, y, 300, 254)
         self._panel(rect, f"선택 개체 #{biomorph.id}")
         self.screen.blit(self.small_font.render(f"적합도 exp(-D): {score:.3f}", True, self.colors["accent"]), (rect.x + 16, rect.y + 38))
 
-        important = self._largest_trait_gaps(biomorph, world)[:4]
+        important = self._largest_trait_gaps(biomorph, world)[:3]
         for i, (name, gap) in enumerate(important):
             value = biomorph.genome.traits[name]
             target = world.environment.optimal_traits[name]
@@ -217,20 +252,43 @@ class Renderer:
             gap_img = self.tiny_font.render(f"{gap:.2f}", True, self.colors["muted"])
             self.screen.blit(gap_img, (rect.right - gap_img.get_width() - 16, row_y))
 
+        lineage = world.trace_lineage(biomorph.id)
+        self.screen.blit(self.tiny_font.render("── 계보", True, self.colors["muted"]), (rect.x + 16, rect.y + 158))
+        if len(lineage) <= 1:
+            self.screen.blit(self.tiny_font.render("초기 개체 (조상 없음)", True, self.colors["muted"]), (rect.x + 16, rect.y + 176))
+        else:
+            shown = lineage[-3:]
+            for i, record in enumerate(shown):
+                gen = record["generation"]
+                rid = record["id"]
+                fit = record["fitness"]
+                src = "부모" if record["source"] == "선택 부모 자손" else "돌연변이"
+                line = f"세대{gen} #{rid} ({src}, {fit:.2f})"
+                color = self.colors["accent"] if rid == biomorph.id else self.colors["muted"]
+                self.screen.blit(self.tiny_font.render(line, True, color), (rect.x + 16, rect.y + 176 + i * 20))
+
         note_name = important[0][0] if important else TRAIT_NAMES[0]
-        note = self._shorten(TRAIT_ENVIRONMENT_NOTES[note_name], 36)
-        self.screen.blit(self.tiny_font.render(note, True, (184, 194, 187)), (rect.x + 16, rect.bottom - 20))
+        note = self._fit_text(TRAIT_ENVIRONMENT_NOTES[note_name], self.tiny_font, rect.width - 32)
+        self.screen.blit(self.tiny_font.render(note, True, (184, 194, 187)), (rect.x + 16, rect.bottom - 18))
+
+    def _draw_disaster_overlay(self):
+        overlay = pygame.Surface((360, 130), pygame.SRCALPHA)
+        overlay.fill((20, 24, 28, 220))
+        self.screen.blit(overlay, (480, 240))
+        border = pygame.Rect(480, 240, 360, 130)
+        pygame.draw.rect(self.screen, self.colors["danger"], border, 2, border_radius=8)
+        self.screen.blit(self.small_font.render("재난 선택 (D: 취소)", True, self.colors["danger"]), (496, 254))
+        disasters = ["1. 가뭄", "2. 폭풍", "3. 한파", "4. 폭염"]
+        for i, label in enumerate(disasters):
+            col, row = i % 2, i // 2
+            self.screen.blit(self.small_font.render(label, True, self.colors["text"]), (496 + col * 168, 286 + row * 28))
 
     def _draw_rank_event_panel(self, world, ranked, x, y):
-        rect = pygame.Rect(x, y, 300, 86)
+        rect = pygame.Rect(x, y, 300, 62)
         self._panel(rect, "이번 세대 자연선택")
         for i, (biomorph, score) in enumerate(ranked[:5]):
             px = rect.x + 16 + i * 52
             self._small_badge(px, rect.y + 38, f"#{biomorph.id}", self.colors["accent"])
-            self.screen.blit(self.tiny_font.render(f"{score:.2f}", True, self.colors["muted"]), (px + 4, rect.y + 60))
-        if world.message:
-            msg = self.tiny_font.render(self._shorten(world.message, 34), True, self.colors["gold"])
-            self.screen.blit(msg, (rect.x + 16, rect.bottom - 14))
 
     def _draw_start_page(self, world):
         self.start_buttons = {}
@@ -299,9 +357,9 @@ class Renderer:
         subtitle = self.small_font.render(f"{MAX_GENERATIONS}세대 동안 부모로 선택된 개체군의 형질 변화를 정리합니다.", True, self.colors["muted"])
         self.screen.blit(title, (34, 28))
         self.screen.blit(subtitle, (36, 62))
-        self._metric_pill(850, 30, "최종 세대", str(world.generation), self.colors["accent"])
-        self._metric_pill(995, 30, "추적 형질", "6개", self.colors["gold"])
-        self._metric_pill(1140, 30, "대표 적합도", f"{summary['winner_score']:.3f}", self.colors["blue"])
+        self._metric_pill(1010, 30, "최종 세대", str(world.generation), self.colors["accent"])
+        self._metric_pill(1155, 30, "추적 형질", "6개", self.colors["gold"])
+        self._metric_pill(1300, 30, "대표 적합도", f"{summary['winner_score']:.3f}", self.colors["blue"])
 
         rep_rect = pygame.Rect(34, 112, 300, 430)
         self._panel(rep_rect, "대표 선택 개체")
@@ -309,14 +367,18 @@ class Renderer:
         pygame.draw.rect(self.screen, (20, 24, 28), portrait, border_radius=10)
         pygame.draw.rect(self.screen, self.colors["gold"], portrait, 2, border_radius=10)
         representative.draw(self.screen, portrait.inflate(-26, -22), selected=True)
+        first_mut = summary["first_mutant_generation"]
+        first_mut_text = f"{first_mut}세대에서 돌연변이로 등장" if first_mut else "초기 개체 출신 (돌연변이 없음)"
         details = [
             f"대표 ID: #{representative.id}",
-            f"부모 ID: {representative.parent_id if representative.parent_id is not None else '쌩랜덤 돌연변이'}",
+            f"부모 ID: {representative.parent_id if representative.parent_id is not None else '없음 (순수 돌연변이)'}",
             f"대표 적합도: {summary['winner_score']:.3f}",
             f"선택 오차 D: {summary['winner_error']:.3f}",
+            f"기원: {first_mut_text}",
         ]
         for i, text in enumerate(details):
-            self.screen.blit(self.small_font.render(text, True, self.colors["text"] if i == 0 else self.colors["muted"]), (rep_rect.x + 24, rep_rect.y + 330 + i * 24))
+            color = self.colors["text"] if i == 0 else (self.colors["purple"] if i == 4 and first_mut else self.colors["muted"])
+            self.screen.blit(self.small_font.render(text, True, color), (rep_rect.x + 24, rep_rect.y + 316 + i * 24))
 
         spec_rect = pygame.Rect(354, 112, 256, 430)
         self._panel(spec_rect, "대표 개체 스펙")
@@ -331,21 +393,23 @@ class Renderer:
             pygame.draw.line(self.screen, self.colors["gold"], (marker_x, row_y), (marker_x, row_y + 14), 2)
             self.screen.blit(self.tiny_font.render(f"{value:.2f} / 차이 {gap:.2f}", True, self.colors["muted"]), (spec_rect.x + 18, row_y + 17))
 
-        trend_rect = pygame.Rect(632, 112, 280, 176)
+        trend_rect = pygame.Rect(632, 112, 774, 198)
         self._panel(trend_rect, "선택 부모 적합도 변화")
+        gen_ticks = [row["generation"] for row in world.history]
         self._line_graph(
-            pygame.Rect(trend_rect.x + 18, trend_rect.y + 52, 244, 82),
+            pygame.Rect(trend_rect.x + 18, trend_rect.y + 52, 738, 96),
             [
                 ("전체 평균", [row["avg_fitness"] for row in world.history], self.colors["accent"]),
                 ("최고", [row["best_fitness"] for row in world.history], self.colors["gold"]),
             ],
             0.0,
             1.0,
+            x_ticks=gen_ticks,
         )
-        fit_text = f"부모 평균: {summary['initial_selected_fitness']:.3f} -> {summary['final_selected_fitness']:.3f}"
-        self.screen.blit(self.tiny_font.render(fit_text, True, self.colors["accent"]), (trend_rect.x + 18, trend_rect.bottom - 28))
+        fit_text = f"부모 평균: {summary['initial_selected_fitness']:.3f} → {summary['final_selected_fitness']:.3f}"
+        self.screen.blit(self.tiny_font.render(fit_text, True, self.colors["accent"]), (trend_rect.x + 18, trend_rect.bottom - 14))
 
-        trait_rect = pygame.Rect(632, 310, 614, 232)
+        trait_rect = pygame.Rect(632, 318, 774, 232)
         self._panel(trait_rect, "세대별 대표 형질 변화 그래프")
         tracked_traits = [
             "trunk_length",
@@ -355,7 +419,7 @@ class Renderer:
             "wing_span",
             "mutation_rate",
         ]
-        graph_rect = pygame.Rect(trait_rect.x + 18, trait_rect.y + 50, 578, 130)
+        graph_rect = pygame.Rect(trait_rect.x + 18, trait_rect.y + 50, 738, 130)
         series = [
             (
                 TRAIT_LABELS[name],
@@ -368,12 +432,66 @@ class Renderer:
         guide = self.tiny_font.render("x축: 세대   y축: 개체군 평균 형질값", True, self.colors["muted"])
         self.screen.blit(guide, (trait_rect.x + 18, trait_rect.bottom - 30))
 
-        close_rect = pygame.Rect(34, 574, 1212, 138)
-        self._panel(close_rect, "결론")
-        for i, text in enumerate(self._build_conclusion(summary)):
-            self.screen.blit(self.small_font.render(text, True, self.colors["text"] if i == 0 else self.colors["muted"]), (close_rect.x + 22, close_rect.y + 42 + i * 26))
-        guide = self.tiny_font.render("R: 새 실험 시작    ESC: 종료", True, self.colors["gold"])
-        self.screen.blit(guide, (close_rect.right - guide.get_width() - 24, close_rect.bottom - 28))
+        gallery_rect = pygame.Rect(34, 558, 1372, 178)
+        self._draw_ancestor_gallery(summary["lineage"], gallery_rect)
+
+        close_rect = pygame.Rect(34, 744, 1372, 56)
+        pygame.draw.rect(self.screen, self.colors["panel"], close_rect, border_radius=6)
+        pygame.draw.rect(self.screen, self.colors["border"], close_rect, 1, border_radius=6)
+        conclusion = self._build_conclusion(summary)
+        self.screen.blit(self.tiny_font.render(self._fit_text(conclusion[1], self.tiny_font, 900), True, self.colors["muted"]), (close_rect.x + 16, close_rect.y + 8))
+        guide = self.tiny_font.render("F11: 전체화면    R: 새 실험    ESC: 종료", True, self.colors["gold"])
+        self.screen.blit(guide, (close_rect.right - guide.get_width() - 16, close_rect.y + 8))
+
+    def _draw_ancestor_gallery(self, lineage, rect):
+        self._panel(rect, "세대별 진화 계보  (마우스 휠로 스크롤 →)", accent=self.colors["gold"])
+        if not lineage:
+            self.screen.blit(self.tiny_font.render("계보 데이터 없음", True, self.colors["muted"]), (rect.x + 16, rect.y + 50))
+            return
+
+        card_w = 110
+        n = len(lineage)
+        content_w = rect.width - 20
+        total_w = n * card_w
+        max_scroll = max(0, total_w - content_w)
+        self.gallery_scroll_x = max(0, min(self.gallery_scroll_x, max_scroll))
+
+        content_rect = pygame.Rect(rect.x + 10, rect.y + 38, content_w, rect.height - 52)
+        old_clip = self.screen.get_clip()
+        self.screen.set_clip(content_rect)
+
+        for i, record in enumerate(lineage):
+            cx = content_rect.x + i * card_w - self.gallery_scroll_x
+            if cx + card_w < content_rect.x or cx > content_rect.right:
+                continue
+
+            is_last = (i == n - 1)
+            border_color = self.colors["gold"] if is_last else (50, 60, 68)
+            card_rect = pygame.Rect(cx, content_rect.y, card_w - 4, content_rect.height)
+            pygame.draw.rect(self.screen, (18, 22, 27), card_rect, border_radius=6)
+            pygame.draw.rect(self.screen, border_color, card_rect, 2 if is_last else 1, border_radius=6)
+
+            g = _Genome(record["traits"].copy())
+            temp = _Biomorph(genome=g)
+            inner = card_rect.inflate(-10, -22)
+            inner.y += 2
+            temp.draw(self.screen, inner, False)
+
+            gen_label = self.tiny_font.render(f"세대{record['generation']}", True, self.colors["gold"] if is_last else self.colors["muted"])
+            self.screen.blit(gen_label, (card_rect.centerx - gen_label.get_width() // 2, card_rect.bottom - 14))
+
+            if is_last:
+                crown = self.tiny_font.render("★", True, self.colors["gold"])
+                self.screen.blit(crown, (card_rect.centerx - crown.get_width() // 2, card_rect.y + 2))
+
+        self.screen.set_clip(old_clip)
+
+        if max_scroll > 0:
+            bar_total = content_w
+            bar_w = max(30, int(bar_total * content_w / total_w))
+            bar_x = rect.x + 10 + int(self.gallery_scroll_x * (bar_total - bar_w) / max_scroll)
+            pygame.draw.rect(self.screen, (40, 48, 54), (rect.x + 10, rect.bottom - 7, content_w, 4), border_radius=2)
+            pygame.draw.rect(self.screen, self.colors["muted"], (bar_x, rect.bottom - 7, bar_w, 4), border_radius=2)
 
     def _build_conclusion(self, summary):
         best_trait = summary["selected_improved_traits"][0][0]
@@ -386,30 +504,47 @@ class Renderer:
             f"전체 집단 평균 적합도 변화는 {fitness_delta:+.3f}, 평균 선택 오차 D 변화는 {error_delta:+.3f}입니다.",
         ]
 
-    def _line_graph(self, rect, series, min_value, max_value, show_labels=True):
-        pygame.draw.rect(self.screen, (20, 24, 28), rect, border_radius=6)
-        pygame.draw.rect(self.screen, (50, 58, 64), rect, 1, border_radius=6)
+    def _line_graph(self, rect, series, min_value, max_value, show_labels=True, x_ticks=None):
+        x_label_h = 14 if x_ticks else 0
+        graph_rect = pygame.Rect(rect.x, rect.y, rect.width, rect.height - x_label_h)
+
+        pygame.draw.rect(self.screen, (20, 24, 28), graph_rect, border_radius=6)
+        pygame.draw.rect(self.screen, (50, 58, 64), graph_rect, 1, border_radius=6)
         for ratio in (0.25, 0.5, 0.75):
-            y = rect.bottom - int(rect.height * ratio)
-            pygame.draw.line(self.screen, (38, 44, 49), (rect.x + 8, y), (rect.right - 8, y), 1)
+            y = graph_rect.bottom - int(graph_rect.height * ratio)
+            pygame.draw.line(self.screen, (38, 44, 49), (graph_rect.x + 8, y), (graph_rect.right - 8, y), 1)
+
         span = max(0.001, max_value - min_value)
+        n_points = 0
         for label, values, color in series:
             if len(values) < 2:
                 continue
             visible = values[-60:]
+            n_points = len(visible)
             points = []
             for index, value in enumerate(visible):
-                x = rect.x + 10 + index * ((rect.width - 20) / max(1, len(visible) - 1))
+                x = graph_rect.x + 10 + index * ((graph_rect.width - 20) / max(1, n_points - 1))
                 normalized = (value - min_value) / span
-                y = rect.bottom - 8 - normalized * (rect.height - 16)
+                y = graph_rect.bottom - 8 - normalized * (graph_rect.height - 16)
                 points.append((x, y))
             pygame.draw.lines(self.screen, color, False, points, 2)
+
         if show_labels:
-            label_x = rect.x + 8
+            label_x = graph_rect.x + 8
             for label, _values, color in series:
                 text = self.tiny_font.render(label, True, color)
-                self.screen.blit(text, (label_x, rect.y + 7))
+                self.screen.blit(text, (label_x, graph_rect.y + 7))
                 label_x += text.get_width() + 16
+
+        if x_ticks and n_points > 0:
+            visible_ticks = x_ticks[-60:]
+            n = len(visible_ticks)
+            max_labels = min(n, max(2, graph_rect.width // 48))
+            step = max(1, n // max_labels)
+            for i in range(0, n, step):
+                x = graph_rect.x + 10 + i * ((graph_rect.width - 20) / max(1, n - 1))
+                label = self.tiny_font.render(str(visible_ticks[i]), True, self.colors["muted"])
+                self.screen.blit(label, (int(x) - label.get_width() // 2, graph_rect.bottom + 2))
 
     def _largest_trait_gaps(self, biomorph, world):
         gaps = []
@@ -419,10 +554,13 @@ class Renderer:
             gaps.append((name, abs(trait - target)))
         return sorted(gaps, key=lambda item: item[1], reverse=True)
 
-    def _panel(self, rect, title):
+    def _panel(self, rect, title, accent=None):
         pygame.draw.rect(self.screen, self.colors["panel"], rect, border_radius=8)
         pygame.draw.rect(self.screen, self.colors["border"], rect, 1, border_radius=8)
-        self.screen.blit(self.small_font.render(title, True, self.colors["text"]), (rect.x + 16, rect.y + 13))
+        title_img = self.small_font.render(title, True, self.colors["text"])
+        self.screen.blit(title_img, (rect.x + 16, rect.y + 11))
+        line_color = accent if accent else self.colors["border"]
+        pygame.draw.line(self.screen, line_color, (rect.x + 1, rect.y + 34), (rect.right - 1, rect.y + 34), 1)
 
     def _bar(self, x, y, w, h, value, color):
         value = max(0.0, min(1.0, value))
@@ -444,6 +582,13 @@ class Renderer:
 
     def _shorten(self, text, limit):
         return text if len(text) <= limit else text[: limit - 3] + "..."
+
+    def _fit_text(self, text, font, max_width):
+        if font.size(text)[0] <= max_width:
+            return text
+        while len(text) > 0 and font.size(text + "...")[0] > max_width:
+            text = text[:-1]
+        return text + "..."
 
     def get_card_index_at(self, position):
         for index, rect in enumerate(self.card_rects):
@@ -494,25 +639,43 @@ class InputHandler:
                 return True
 
             if event.key == pygame.K_n:
+                world.disaster_select_mode = False
                 world.next_generation()
             elif event.key == pygame.K_r:
                 world.randomize()
             elif event.key == pygame.K_SPACE:
+                world.disaster_select_mode = False
                 world.toggle_pause()
             elif event.key == pygame.K_a:
+                world.disaster_select_mode = False
                 world.environment.toggle_auto_mode()
             elif event.key == pygame.K_g:
+                world.disaster_select_mode = False
                 world.toggle_auto_generation()
             elif event.key == pygame.K_d:
-                world.trigger_disaster()
+                if world.disaster_select_mode:
+                    world.disaster_select_mode = False
+                    world.message = "재난 선택을 취소했습니다."
+                else:
+                    world.disaster_select_mode = True
+                    world.message = "재난 선택: 1가뭄  2폭풍  3한파  4폭염  (D: 취소)"
             elif event.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4):
-                world.environment.select_factor(event.key - pygame.K_1)
+                if world.disaster_select_mode:
+                    world.trigger_disaster(event.key - pygame.K_1)
+                else:
+                    world.environment.select_factor(event.key - pygame.K_1)
             elif event.key == pygame.K_LEFT:
+                world.disaster_select_mode = False
                 world.environment.adjust_selected_factor(-0.05)
             elif event.key == pygame.K_RIGHT:
+                world.disaster_select_mode = False
                 world.environment.adjust_selected_factor(0.05)
             elif event.key == pygame.K_ESCAPE:
-                return False
+                if world.disaster_select_mode:
+                    world.disaster_select_mode = False
+                    world.message = "재난 선택을 취소했습니다."
+                else:
+                    return False
 
         return True
 

@@ -19,11 +19,21 @@ def main():
     input_handler = InputHandler()
 
     running = True
+    fullscreen = False
 
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+                fullscreen = not fullscreen
+                pygame.display.toggle_fullscreen()
+                continue
+
+            if event.type == pygame.MOUSEWHEEL:
+                renderer.gallery_scroll_x = max(0, renderer.gallery_scroll_x + event.x * 30 - event.y * 30)
+                continue
 
             if not input_handler.handle(event, world, renderer):
                 running = False
