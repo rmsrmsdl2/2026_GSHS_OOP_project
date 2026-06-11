@@ -29,7 +29,10 @@ class World:
         self.parent_ids = []
         self.message = "실험 방식을 선택하세요."
         self.history = []
+        self.selection_history = []
+        self.lineage = {}
         self.environment.update(self.generation)
+        self._register_population(self.population, source="초기 개체")
 
     @property
     def selected(self):
@@ -58,16 +61,22 @@ class World:
         ranked = self.ranked_population()
         parents = [biomorph for biomorph, _score in ranked[:PARENT_COUNT]]
         self.parent_ids = [parent.id for parent in parents]
+        self.record_selection(parents, ranked)
 
         children = []
         for parent in parents:
             for _ in range(CHILDREN_PER_PARENT):
-                children.append(parent.breed_child())
+                child = parent.breed_child()
+                children.append(child)
 
         pure_mutants = [Biomorph() for _ in range(PURE_MUTANT_COUNT)]
-        self.population = (children + pure_mutants)[:POPULATION_SIZE]
-        self.selected_index = 0
+        next_population = (children + pure_mutants)[:POPULATION_SIZE]
+
         self.generation += 1
+        self.population = next_population
+        self._register_population(children, source="선택 부모 자손")
+        self._register_population(pure_mutants, source="쌩랜덤 돌연변이")
+        self.selected_index = 0
         self.frame_count = 0
         self.environment.update(self.generation)
         self.record_history()
@@ -75,10 +84,10 @@ class World:
         if self.generation >= MAX_GENERATIONS:
             self.finished = True
             self.auto_generation = False
-            self.message = "실험 종료: 최종 적응 결과를 정리합니다."
+            self.message = "실험 종료: 최종 대표 개체의 부모 계보를 정리합니다."
         else:
             self.message = (
-                f"{self.generation}세대: 상위 {PARENT_COUNT}개체의 자손 "
+                f"{self.generation}세대: 선택 부모 {PARENT_COUNT}개체의 자손 "
                 f"{PARENT_COUNT * CHILDREN_PER_PARENT}개체와 쌩랜덤 돌연변이 "
                 f"{PURE_MUTANT_COUNT}개체가 생성되었습니다."
             )
@@ -111,6 +120,23 @@ class World:
         })
         self.history = self.history[-HISTORY_LIMIT:]
 
+    def record_selection(self, parents, ranked):
+        parent_scores = [self.fitness(parent) for parent in parents]
+        avg_parent_traits = {}
+
+        for name in TRAIT_NAMES:
+            avg_parent_traits[name] = sum(parent.genome.traits[name] for parent in parents) / len(parents)
+
+        self.selection_history.append({
+            "generation": self.generation,
+            "parent_ids": [parent.id for parent in parents],
+            "avg_parent_fitness": sum(parent_scores) / len(parent_scores),
+            "best_parent_fitness": parent_scores[0],
+            "avg_parent_traits": avg_parent_traits,
+            "representative_parent": ranked[0][0],
+        })
+        self.selection_history = self.selection_history[-HISTORY_LIMIT:]
+
     def selection_error(self, biomorph):
         error = 0.0
         for name in TRAIT_NAMES:
@@ -121,38 +147,72 @@ class World:
 
     def experiment_summary(self):
         ranked = self.ranked_population()
-        winner, winner_score = ranked[0]
+        representative, representative_score = ranked[0]
         first = self.history[0]
         last = self.history[-1]
+        first_selection = self.selection_history[0] if self.selection_history else None
+        last_selection = self.selection_history[-1] if self.selection_history else None
         trait_changes = []
+        selected_trait_changes = []
 
         for name in TRAIT_NAMES:
             start = first["avg_traits"][name]
             end = last["avg_traits"][name]
             trait_changes.append((name, start, end, end - start))
 
+            if first_selection and last_selection:
+                selected_start = first_selection["avg_parent_traits"][name]
+                selected_end = last_selection["avg_parent_traits"][name]
+                selected_trait_changes.append((name, selected_start, selected_end, selected_end - selected_start))
+
         improved = sorted(trait_changes, key=lambda item: item[3], reverse=True)
-        declined = sorted(trait_changes, key=lambda item: item[3])
+        selected_improved = sorted(selected_trait_changes, key=lambda item: item[3], reverse=True)
         closest_traits = sorted(
             (
-                (name, abs(winner.genome.traits[name] - self.environment.optimal_traits[name]))
+                (name, abs(representative.genome.traits[name] - self.environment.optimal_traits[name]))
                 for name in TRAIT_NAMES
             ),
             key=lambda item: item[1],
         )
 
         return {
-            "winner": winner,
-            "winner_score": winner_score,
-            "winner_error": self.selection_error(winner),
+            "winner": representative,
+            "winner_score": representative_score,
+            "winner_error": self.selection_error(representative),
+            "lineage": self.trace_lineage(representative.id),
+            "last_selected_parent_ids": last_selection["parent_ids"] if last_selection else [],
+            "initial_selected_fitness": first_selection["avg_parent_fitness"] if first_selection else first["avg_fitness"],
+            "final_selected_fitness": last_selection["avg_parent_fitness"] if last_selection else last["avg_fitness"],
             "initial_avg_fitness": first["avg_fitness"],
             "final_avg_fitness": last["avg_fitness"],
             "initial_avg_error": first["avg_error"],
             "final_avg_error": last["avg_error"],
             "improved_traits": improved[:4],
-            "declined_traits": declined[:3],
+            "selected_improved_traits": selected_improved[:4] if selected_improved else improved[:4],
             "closest_traits": closest_traits[:4],
         }
+
+    def trace_lineage(self, biomorph_id):
+        chain = []
+        current_id = biomorph_id
+
+        while current_id is not None and current_id in self.lineage:
+            record = self.lineage[current_id]
+            chain.append(record)
+            current_id = record["parent_id"]
+
+        return list(reversed(chain))
+
+    def _register_population(self, biomorphs, source):
+        for biomorph in biomorphs:
+            self.lineage[biomorph.id] = {
+                "id": biomorph.id,
+                "parent_id": biomorph.parent_id,
+                "generation": self.generation,
+                "source": source,
+                "fitness": self.fitness(biomorph),
+                "traits": biomorph.genome.traits.copy(),
+            }
 
     def randomize(self):
         self.population = [Biomorph() for _ in range(POPULATION_SIZE)]
@@ -167,6 +227,9 @@ class World:
         self.environment = Environment()
         self.environment.update(self.generation)
         self.history = []
+        self.selection_history = []
+        self.lineage = {}
+        self._register_population(self.population, source="초기 개체")
         self.message = "새 실험을 시작할 방식을 선택하세요."
 
     def choose_auto_start(self):
@@ -175,6 +238,7 @@ class World:
         self.auto_generation = True
         self.environment.auto_mode = True
         self.history = []
+        self.selection_history = []
         self.record_history()
         self.message = "자동 모드로 실험을 시작했습니다."
 
@@ -191,6 +255,7 @@ class World:
         self.auto_generation = False
         self.environment.auto_mode = False
         self.history = []
+        self.selection_history = []
         self.record_history()
         self.message = "수동 설정 환경으로 실험을 시작했습니다. N으로 세대를 진행하세요."
 

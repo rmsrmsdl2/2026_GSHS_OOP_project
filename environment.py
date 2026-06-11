@@ -75,13 +75,13 @@ class Environment:
         weights = {
             "trunk_length": 0.9,
             "branch_angle": 1.2,
-            "curvature": 0.7,
+            "curvature": 1.0,
             "branch_ratio": 0.8,
-            "body_width": 0.9,
-            "wing_span": 1.1,
-            "antenna_angle": 0.7,
-            "recursion_depth": 0.6,
-            "mutation_rate": 0.4,
+            "body_width": 1.0,
+            "wing_span": 1.4,
+            "antenna_angle": 0.8,
+            "recursion_depth": 0.7,
+            "mutation_rate": 0.6,
         }
 
         for name in TRAIT_NAMES:
@@ -101,6 +101,7 @@ class Environment:
         if wind > 0.65:
             penalty += max(0.0, traits["wing_span"] - 0.45) * (wind - 0.65) * 1.5
             penalty += max(0.0, 0.35 - traits["body_width"]) * (wind - 0.65) * 0.9
+            penalty += max(0.0, traits["branch_angle"] - 0.55) * (wind - 0.65) * 1.0
 
         if humidity > 0.60:
             mismatch = abs(traits["antenna_angle"] - traits["branch_ratio"])
@@ -113,6 +114,10 @@ class Environment:
         if temperature > 0.70:
             penalty += max(0.0, traits["body_width"] - 0.58) * (temperature - 0.70) * 1.1
             penalty += max(0.0, traits["recursion_depth"] - 0.70) * (temperature - 0.70) * 0.8
+
+        if light > 0.70 and temperature > 0.70:
+            penalty += max(0.0, traits["recursion_depth"] - 0.62) * (light - 0.70) * (temperature - 0.70) * 2.0
+            penalty += max(0.0, traits["branch_ratio"] - 0.62) * (light - 0.70) * (temperature - 0.70) * 1.4
 
         return penalty
 
@@ -144,16 +149,20 @@ class Environment:
         temperature = self.factors["temperature"]
         instability = abs(temperature - humidity) + abs(wind - light)
 
-        self.optimal_traits.update({
+        optimal_traits = {
             "trunk_length": 0.25 + light * 0.45,
-            "branch_angle": 0.20 + light * 0.50,
-            "curvature": 0.20 + wind * 0.55,
-            "branch_ratio": 0.25 + humidity * 0.50,
-            "body_width": 0.70 - temperature * 0.42,
-            "wing_span": 0.72 - wind * 0.50,
+            "branch_angle": 0.20 + light * 0.45 - wind * 0.20,
+            "curvature": 0.20 + wind * 0.45 + humidity * 0.15,
+            "branch_ratio": 0.25 + humidity * 0.45,
+            "body_width": 0.68 - temperature * 0.35 + wind * 0.12,
+            "wing_span": 0.68 + light * 0.15 - wind * 0.45 - temperature * 0.10,
             "antenna_angle": 0.18 + humidity * 0.58,
-            "recursion_depth": 0.22 + light * 0.45,
-            "mutation_rate": 0.16 + min(0.72, instability * 0.60),
+            "recursion_depth": 0.20 + light * 0.40 - temperature * 0.20,
+            "mutation_rate": 0.12 + min(0.65, instability * 0.55 + abs(temperature - 0.5) * 0.25),
+        }
+
+        self.optimal_traits.update({
+            name: self._clamp(value) for name, value in optimal_traits.items()
         })
 
     def _push_event(self, text):
